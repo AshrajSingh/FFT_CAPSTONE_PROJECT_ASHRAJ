@@ -11,22 +11,20 @@ import {
   CheckCircle2,
   ArrowRight,
   Database,
-  Server,
   Users
 } from 'lucide-react';
-import stocklinkLogo from './assets/stocklink-logo.png';
+import stocklinkLogo from '../assets/stocklink-logo.png';
 import {
   matrixProducts,
   retailerMockupData,
   userFlowData,
   wholesalerInventory,
   wholesalerMetrics
-} from './data/landingPageData';
-import './LandingPage.css';
+} from '../data/landingPageData';
+import '../styles/LandingPage.css';
 
-export default function LandingPage() {
+export default function LandingPage({ onNavigate }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [cartItemsCount, setCartItemsCount] = useState(
     retailerMockupData.initialCartItemsCount
@@ -40,24 +38,34 @@ export default function LandingPage() {
 
   const handleAddItem = (productName) => {
     setCartItemsCount((prev) => prev + 1);
-    // setToastMessage(`Added ${productName} to Split-Cart!`);
+    setToastMessage(`Added ${productName} to Split-Cart!`);
     setTimeout(() => {
       setToastMessage('');
     }, 3000);
   };
 
   const handleActionClick = (actionName) => {
-    // setToastMessage(`Action: "${actionName}" triggered successfully.`);
+    if (actionName === 'Log In' && onNavigate) {
+      onNavigate({ page: 'auth', mode: 'login' });
+      return;
+    }
+    if ((actionName === 'Sign Up' || actionName === 'Get Wholesale Access') && onNavigate) {
+      onNavigate({ page: 'auth', mode: 'signup', role: 'retailer' });
+      return;
+    }
+    if (actionName === 'Register Your Inventory' && onNavigate) {
+      onNavigate({ page: 'auth', mode: 'signup', role: 'wholesaler' });
+      return;
+    }
+    setToastMessage(`Action: "${actionName}" triggered successfully.`);
     setTimeout(() => {
       setToastMessage('');
     }, 3000);
   };
 
-  const filteredProducts = matrixProducts.filter((product) => {
-    const matchesCategory = activeTab === 'all' || product.category === activeTab;
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  const filteredProducts = matrixProducts.filter((product) =>
+    product.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className="landing-page-container">
@@ -312,7 +320,7 @@ export default function LandingPage() {
                     type="text"
                     placeholder="Search commodities (rice, oil, wheat)..."
                     value={searchTerm}
-                    // onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e) => setSearchTerm(e.target.value)}
                     className="mockup-input-field"
                   />
                 </div>
