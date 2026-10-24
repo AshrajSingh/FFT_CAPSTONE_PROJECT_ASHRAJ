@@ -1,0 +1,86 @@
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import mongoose from 'mongoose';
+import authRoutes from './routes/authRoutes.js';
+
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/stocklink';
+
+// CORS configuration
+app.use(
+  cors({
+    origin: ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:3000'],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+  })
+);
+
+app.use(express.json());
+
+// Request logging middleware in development
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.status(200).json({
+    status: 'healthy',
+    service: 'StockLink B2B Commerce Backend API',
+    mongoStatus: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected (in-memory fallback active)',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Authentication routes
+app.use('/api/auth', authRoutes);
+
+// 404 Handler
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `API endpoint not found: ${req.method} ${req.originalUrl}`
+  });
+});
+
+// Global Error Handler
+app.use((err, req, res, next) => {
+  console.error('Unhandled server error:', err);
+  res.status(500).json({
+    success: false,
+    message: 'Internal server error',
+    error: process.env.NODE_ENV === 'development' ? err.message : undefined
+  });
+});
+
+// Connect to MongoDB with graceful timeout fallback
+async function connectDB() {
+  try {
+    mongoose.set('strictQuery', false);
+    // Connect with a 2-second timeout to avoid indefinite hanging if local daemon isn't up
+    await mongoose.connect(MONGODB_URI, {
+      serverSelectionTimeoutMS: 2000
+    });
+    console.log(`MongoDB Connected successfully to: ${MONGODB_URI}`);
+  } catch (err) {
+    console.warn(`MongoDB connection notice: ${err.message}`);
+    console.warn('Running with resilient in-memory session store. MongoDB Atlas/Local connection can be configured via MONGODB_URI.');
+  }
+}
+
+connectDB().then(() => {
+  app.listen(PORT, () => {
+    console.log(`====================================================`);
+    console.log(` StockLink Backend Server running on port ${PORT}`);
+    console.log(` Health check: http://localhost:${PORT}/api/health`);
+    console.log(` Auth endpoints: http://localhost:${PORT}/api/auth/login`);
+    console.log(` GST verify:     http://localhost:${PORT}/api/auth/verify-gst`);
+    console.log(`====================================================`);
+  });
+});

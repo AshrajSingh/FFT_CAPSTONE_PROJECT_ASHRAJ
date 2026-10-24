@@ -1,65 +1,60 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import LandingPage from './components/LandingPage';
 import AuthPage from './components/AuthPage';
+import RetailerOnboarding from './components/RetailerOnboarding';
+import WholesalerOnboarding from './components/WholesalerOnboarding';
+import RetailerDashboard from './components/RetailerDashboard';
+import WholesalerDashboard from './components/WholesalerDashboard';
 
-export default function App() {
-  // Navigation state: 'landing' | 'auth'
-  const [currentPage, setCurrentPage] = useState('landing');
-  const [authConfig, setAuthConfig] = useState({
-    mode: 'login', // 'login' | 'signup'
-    role: 'retailer' // 'retailer' | 'wholesaler'
-  });
+/**
+ * Landing Page Wrapper to translate LandingPage onNavigate events
+ * into React Router navigation.
+ */
+function LandingRouteWrapper() {
+  const navigate = useNavigate();
 
-  // Check URL hash on initial load or popstate
-  useEffect(() => {
-    const handleHashChange = () => {
-      const hash = window.location.hash.toLowerCase();
-      if (hash.startsWith('#auth') || hash.startsWith('#login') || hash.startsWith('#signup')) {
-        setCurrentPage('auth');
-        const isSignup = hash.includes('signup') || hash.includes('register');
-        const isWholesaler = hash.includes('wholesaler') || hash.includes('seller');
-        setAuthConfig({
-          mode: isSignup ? 'signup' : 'login',
-          role: isWholesaler ? 'wholesaler' : 'retailer'
-        });
-      } else {
-        setCurrentPage('landing');
-      }
-    };
+  const handleNavigate = (dest) => {
+    if (!dest) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
 
-    handleHashChange();
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
-
-  const handleNavigate = (destination) => {
-    if (typeof destination === 'string') {
-      setCurrentPage(destination);
-      window.location.hash = destination === 'auth' ? '#auth' : '';
-    } else if (destination && destination.page === 'auth') {
-      setCurrentPage('auth');
-      const mode = destination.mode || 'login';
-      const role = destination.role || 'retailer';
-      setAuthConfig({ mode, role });
-      window.location.hash = `#auth?mode=${mode}&role=${role}`;
+    if (dest === 'auth' || dest.page === 'auth') {
+      const mode = dest.mode || 'login';
+      const role = dest.role || 'retailer';
+      navigate(`/login?mode=${mode}&role=${role}`);
     } else {
-      setCurrentPage('landing');
-      window.location.hash = '';
+      navigate('/');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
+  return <LandingPage onNavigate={handleNavigate} />;
+}
+
+export default function App() {
   return (
-    <>
-      {currentPage === 'landing' ? (
-        <LandingPage onNavigate={handleNavigate} />
-      ) : (
-        <AuthPage
-          initialMode={authConfig.mode}
-          initialRole={authConfig.role}
-          onNavigate={handleNavigate}
-        />
-      )}
-    </>
+    <BrowserRouter>
+      <Routes>
+        {/* Marketplace Landing Page */}
+        <Route path="/" element={<LandingRouteWrapper />} />
+
+        {/* Authentication Page (Accessible via /login and /auth) */}
+        <Route path="/login" element={<AuthPage />} />
+        <Route path="/auth" element={<AuthPage />} />
+
+        {/* Retailer & Wholesaler Onboarding Pages (Linked directly after Auth) */}
+        <Route path="/retailer/onboarding" element={<RetailerOnboarding />} />
+        <Route path="/wholesaler/onboarding" element={<WholesalerOnboarding />} />
+
+        {/* Role Dashboards (Directed after Onboarding verification) */}
+        <Route path="/retailer/dashboard" element={<RetailerDashboard />} />
+        <Route path="/wholesaler/dashboard" element={<WholesalerDashboard />} />
+
+        {/* Fallback wildcard route */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 }

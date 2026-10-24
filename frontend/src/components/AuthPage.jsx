@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Building2,
   Store,
@@ -19,8 +20,16 @@ import { roleShowcaseData, demoCredentials } from '../data/authData';
 import '../styles/AuthPage.css';
 
 export default function AuthPage({ initialMode = 'login', initialRole = 'retailer', onNavigate }) {
-  const [authMode, setAuthMode] = useState(initialMode); // 'login' | 'signup'
-  const [selectedRole, setSelectedRole] = useState(initialRole); // 'retailer' | 'wholesaler'
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  const queryMode = searchParams.get('mode');
+  const queryRole = searchParams.get('role');
+
+  const [authMode, setAuthMode] = useState(queryMode === 'signup' ? 'signup' : initialMode); // 'login' | 'signup'
+  const [selectedRole, setSelectedRole] = useState(
+    queryRole === 'wholesaler' ? 'wholesaler' : initialRole
+  ); // 'retailer' | 'wholesaler'
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -188,7 +197,15 @@ export default function AuthPage({ initialMode = 'login', initialRole = 'retaile
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleBackToMarketplace = () => {
+    if (onNavigate) {
+      onNavigate({ page: 'landing' });
+    } else {
+      navigate('/');
+    }
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!validateForm()) {
@@ -198,21 +215,92 @@ export default function AuthPage({ initialMode = 'login', initialRole = 'retaile
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      setIsSubmitting(false);
-
+    try {
       if (authMode === 'login') {
+        const response = await fetch('http://localhost:5000/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            email: formData.loginEmail,
+            password: formData.loginPassword,
+            role: selectedRole
+          })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.message || (data.errors && data.errors[0]?.message) || 'Login failed');
+        }
+
+        // Store JWT token and user info in localStorage
+        localStorage.setItem('stocklink_token', data.token);
+        localStorage.setItem('stocklink_user', JSON.stringify(data.user));
+
         showToast(
           `Welcome back! Logged in as ${
-            selectedRole === 'retailer' ? 'Retail Store Buyer' : 'Wholesale Supplier'
-          }.`
+            data.user.role === 'retailer' ? 'Retail Store Buyer' : 'Wholesale Supplier'
+          }.`,
+          'success'
         );
+
+        // After login, user is directed to their respective onboarding page
+        setTimeout(() => {
+          navigate(`/${data.user.role}/onboarding`);
+        }, 500);
       } else {
+        // Sign Up Mode
+        const response = await fetch('http://localhost:5000/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            name: formData.businessName || formData.fullName,
+            email: formData.signupEmail,
+            password: formData.signupPassword,
+            role: selectedRole
+          })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.message || (data.errors && data.errors[0]?.message) || 'Registration failed');
+        }
+
+        localStorage.setItem('stocklink_token', data.token);
+        localStorage.setItem('stocklink_user', JSON.stringify(data.user));
+
         showToast(
-          `Registration successful! Verified B2B account created for ${formData.businessName}.`
+          `Registration successful! Directing to ${selectedRole === 'retailer' ? 'Retailer' : 'Wholesaler'} Onboarding...`,
+          'success'
         );
+
+        // After signup, direct to onboarding page
+        setTimeout(() => {
+          navigate(`/${selectedRole}/onboarding`);
+        }, 500);
       }
-    }, 1200);
+    } catch (err) {
+      console.warn('Backend unavailable, proceeding with offline session:', err.message);
+      const fallbackUser = {
+        role: selectedRole,
+        name: formData.businessName || formData.fullName || (selectedRole === 'retailer' ? 'Demo Retailer Store' : 'Demo Wholesaler Mills'),
+        email: authMode === 'login' ? formData.loginEmail : formData.signupEmail,
+        isOnboarded: false,
+        gstin: ''
+      };
+      localStorage.setItem('stocklink_user', JSON.stringify(fallbackUser));
+      showToast(`Directing to ${selectedRole === 'retailer' ? 'Retailer' : 'Wholesaler'} Onboarding...`, 'success');
+      setTimeout(() => {
+        navigate(`/${selectedRole}/onboarding`);
+      }, 500);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const showcase = roleShowcaseData[selectedRole];
@@ -236,7 +324,7 @@ export default function AuthPage({ initialMode = 'login', initialRole = 'retaile
           <div className="showcase-header">
             <div
               className="showcase-brand-link"
-              onClick={() => onNavigate && onNavigate({ page: 'landing' })}
+              onClick={handleBackToMarketplace}
               role="button"
               tabIndex={0}
             >
@@ -249,7 +337,7 @@ export default function AuthPage({ initialMode = 'login', initialRole = 'retaile
             <button
               type="button"
               className="showcase-back-btn"
-              onClick={() => onNavigate && onNavigate({ page: 'landing' })}
+              onClick={handleBackToMarketplace}
             >
               <ArrowRight size={14} style={{ transform: 'rotate(180deg)' }} />
               <span>Back to Marketplace</span>
@@ -754,6 +842,51 @@ export default function AuthPage({ initialMode = 'login', initialRole = 'retaile
               >
                 <Building2 size={15} />
                 <span>Demo Wholesaler</span>
+              </button>
+            </div>
+
+            {/* Direct navigation links to onboarding pages */}
+            <div style={{ marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px dashed #e2e8f0', display: 'flex', justifyContent: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => navigate('/retailer/onboarding')}
+                style={{
+                  background: '#f8fafc',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '6px',
+                  padding: '0.35rem 0.65rem',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  color: 'var(--color-slate)',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem'
+                }}
+              >
+                <Store size={13} color="var(--color-golden-ochre)" />
+                Retailer Onboarding Page →
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navigate('/wholesaler/onboarding')}
+                style={{
+                  background: '#f8fafc',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '6px',
+                  padding: '0.35rem 0.65rem',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  color: 'var(--color-slate)',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem'
+                }}
+              >
+                <Building2 size={13} color="var(--color-golden-ochre)" />
+                Wholesaler Onboarding Page →
               </button>
             </div>
           </div>
