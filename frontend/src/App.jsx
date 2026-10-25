@@ -6,6 +6,8 @@ import RetailerOnboarding from './components/RetailerOnboarding';
 import WholesalerOnboarding from './components/WholesalerOnboarding';
 import RetailerDashboard from './components/RetailerDashboard';
 import WholesalerDashboard from './components/WholesalerDashboard';
+import RetailerProfile from './components/RetailerProfile';
+import WholesalerProfile from './components/WholesalerProfile';
 
 /**
  * Landing Page Wrapper to translate LandingPage onNavigate events
@@ -51,6 +53,10 @@ export default function App() {
         {/* Role Dashboards (Directed after Onboarding verification) */}
         <Route path="/retailer/dashboard" element={<RetailerDashboard />} />
         <Route path="/wholesaler/dashboard" element={<WholesalerDashboard />} />
+
+        {/* Role Profile Settings */}
+        <Route path="/retailer/profile" element={<RetailerProfile />} />
+        <Route path="/wholesaler/profile" element={<WholesalerProfile />} />
 
         {/* Fallback wildcard route */}
         <Route path="*" element={<Navigate to="/" replace />} />

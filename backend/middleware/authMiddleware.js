@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 import User from '../models/User.js';
 
 export const authMiddleware = async (req, res, next) => {
@@ -25,13 +26,13 @@ export const authMiddleware = async (req, res, next) => {
       });
     }
 
-    // Try finding user in database
+    // Try finding user in database if connection is live and id is a valid Mongo ObjectId
     let user = null;
-    if (decoded.id) {
+    if (decoded.id && mongoose.connection.readyState === 1 && mongoose.isValidObjectId(decoded.id)) {
       try {
         user = await User.findById(decoded.id).select('-password');
       } catch (dbErr) {
-        console.warn('DB lookup failed in authMiddleware:', dbErr.message);
+        // Fall back to decoded token payload
       }
     }
 

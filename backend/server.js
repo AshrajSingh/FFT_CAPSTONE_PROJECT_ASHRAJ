@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import authRoutes from './routes/authRoutes.js';
+import dashboardRoutes from './routes/dashboardRoutes.js';
 
 dotenv.config();
 
@@ -41,6 +42,9 @@ app.get('/api/health', (req, res) => {
 // Authentication routes
 app.use('/api/auth', authRoutes);
 
+// Dashboard & Catalogue routes
+app.use('/api/dashboard', dashboardRoutes);
+
 // 404 Handler
 app.use((req, res) => {
   res.status(404).json({
@@ -63,7 +67,6 @@ app.use((err, req, res, next) => {
 async function connectDB() {
   try {
     mongoose.set('strictQuery', false);
-    // Connect with a 2-second timeout to avoid indefinite hanging if local daemon isn't up
     await mongoose.connect(MONGODB_URI, {
       serverSelectionTimeoutMS: 2000
     });
@@ -80,7 +83,7 @@ connectDB().then(() => {
     console.log(` StockLink Backend Server running on port ${PORT}`);
     console.log(` Health check: http://localhost:${PORT}/api/health`);
     console.log(` Auth endpoints: http://localhost:${PORT}/api/auth/login`);
-    console.log(` GST verify:     http://localhost:${PORT}/api/auth/verify-gst`);
+    console.log(` Dashboard endpoints: http://localhost:${PORT}/api/dashboard/*`);
     console.log(`====================================================`);
   });
 });

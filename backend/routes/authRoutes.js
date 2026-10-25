@@ -13,13 +13,13 @@ import {
 import { authMiddleware } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
-const inMemoryUsers = new Map();          // fallback when MongoDB is down
+export const inMemoryUsers = new Map();          // fallback when MongoDB is down
 
-const isDbConnected = () => mongoose.connection.readyState === 1;
-const getJwtSecret  = () => process.env.JWT_SECRET || 'stocklink_super_secret_jwt_key_2026_dev';
+export const isDbConnected = () => mongoose.connection.readyState === 1;
+export const getJwtSecret  = () => process.env.JWT_SECRET || 'stocklink_super_secret_jwt_key_2026_dev';
 
 /* ---------- helpers ---------- */
-const createToken = (user) =>
+export const createToken = (user) =>
   jwt.sign(
     {
       id:           user._id ? user._id.toString() : user.id,
@@ -34,7 +34,7 @@ const createToken = (user) =>
     { expiresIn: '7d' }
   );
 
-const fmt = (u) => ({
+export const fmt = (u) => ({
   id:              u._id ? u._id.toString() : u.id,
   name:            u.name,
   businessName:    u.businessName || u.name,
@@ -151,7 +151,6 @@ router.post('/onboard/wholesaler', authMiddleware, validate(wholesalerOnboarding
     if (!updated) return res.status(404).json({ success: false, message: 'User not found.' });
 
     const token = createToken(updated);
-    localStorage_set(updated);          // helper below does nothing on server – fine
     return res.json({ success: true, message: 'Wholesaler onboarding complete!', token, user: fmt(updated) });
   } catch (err) {
     console.error('Wholesaler onboard error:', err);
@@ -260,12 +259,88 @@ router.post('/verify-gst', authMiddleware, validate(gstinSchema), async (req, re
   }
 });
 
+/* ============================================================
+   PUT /api/auth/profile
+   Updates authenticated user's profile details.
+   Prevents tampering with role, password, _id, or isOnboarded.
+   ============================================================ */
+router.put('/profile', authMiddleware, async (req, res) => {
+  try {
+    const uid = req.user.id || req.user._id;
+    const role = req.user.role;
+    const b = req.body;
+
+    const allowedUpdates = {};
+
+    // Common profile fields
+    if (b.contactPerson !== undefined)  allowedUpdates.contactPerson = String(b.contactPerson).trim();
+    if (b.contactEmail !== undefined)   allowedUpdates.contactEmail = String(b.contactEmail).trim();
+    if (b.phone !== undefined)          allowedUpdates.phone = String(b.phone).trim();
+    if (b.address !== undefined)        allowedUpdates.address = String(b.address).trim();
+    if (b.pincode !== undefined)        allowedUpdates.pincode = String(b.pincode).trim();
+    if (b.coveredPincodes !== undefined)allowedUpdates.coveredPincodes = String(b.coveredPincodes).trim();
+    if (b.deliveryRadius !== undefined) allowedUpdates.deliveryRadius = Number(b.deliveryRadius) || 0;
+    if (b.businessCategory !== undefined) allowedUpdates.businessCategory = String(b.businessCategory).trim();
+
+    // Role-specific profile fields
+    if (role === 'retailer') {
+      if (b.storeName !== undefined) {
+        allowedUpdates.storeName = String(b.storeName).trim();
+        allowedUpdates.businessName = String(b.storeName).trim();
+      }
+      if (b.registeredName !== undefined) {
+        allowedUpdates.registeredName = String(b.registeredName).trim();
+        allowedUpdates.name = String(b.registeredName).trim();
+      }
+      if (b.shopLicense !== undefined)         allowedUpdates.shopLicense = String(b.shopLicense).trim();
+      if (b.paymentCOD !== undefined)          allowedUpdates.paymentCOD = Boolean(b.paymentCOD);
+      if (b.paymentBankTransfer !== undefined) allowedUpdates.paymentBankTransfer = Boolean(b.paymentBankTransfer);
+      if (b.paymentCard !== undefined)         allowedUpdates.paymentCard = Boolean(b.paymentCard);
+    } else if (role === 'wholesaler') {
+      if (b.businessName !== undefined || b.businessLegalName !== undefined) {
+        const legalName = String(b.businessName || b.businessLegalName).trim();
+        allowedUpdates.businessName = legalName;
+        allowedUpdates.name = legalName;
+      }
+      if (b.tradeName !== undefined)       allowedUpdates.tradeName = String(b.tradeName).trim();
+      if (b.operationStatus !== undefined) allowedUpdates.operationStatus = String(b.operationStatus).trim();
+      if (b.mov !== undefined)             allowedUpdates.mov = Number(b.mov) || 0;
+      if (b.capacity !== undefined)        allowedUpdates.capacity = String(b.capacity).trim();
+    }
+
+    let updated;
+    if (isDbConnected()) {
+      updated = await User.findByIdAndUpdate(uid, { $set: allowedUpdates }, { new: true }).select('-password');
+    } else {
+      for (const [k, v] of inMemoryUsers.entries()) {
+        if (v.id === uid || v._id === uid || v.email === req.user.email) {
+          Object.assign(v, allowedUpdates);
+          inMemoryUsers.set(k, v);
+          updated = { ...v };
+          break;
+        }
+      }
+      if (!updated) updated = { ...req.user, ...allowedUpdates };
+    }
+
+    if (!updated) return res.status(404).json({ success: false, message: 'User profile not found.' });
+
+    const token = createToken(updated);
+    return res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      token,
+      user: fmt(updated)
+    });
+  } catch (err) {
+    console.error('Profile update error:', err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 /* GET /api/auth/me */
 router.get('/me', authMiddleware, async (req, res) => {
   res.json({ success: true, user: fmt(req.user) });
 });
-
-// server-side noop (localStorage lives on client)
-function localStorage_set() {}
 
 export default router;
