@@ -2,9 +2,18 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import authRoutes from './routes/authRoutes.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const frontendDistPath = path.resolve(__dirname, '../frontend/dist');
+
+// Load environment variables from backend/.env or current working directory
+dotenv.config({ path: path.resolve(__dirname, '.env') });
 dotenv.config();
 
 const app = express();
@@ -78,11 +87,25 @@ app.use('/api/auth', authRoutes);
 // Dashboard & Catalogue routes
 app.use('/api/dashboard', dashboardRoutes);
 
-// 404 Handler
+// Serve static frontend assets if built
+if (fs.existsSync(frontendDistPath)) {
+  console.log(`[Production] Serving frontend static assets from: ${frontendDistPath}`);
+  app.use(express.static(frontendDistPath));
+
+  // Catch-all route for Single Page Application client-side routing
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) {
+      return next();
+    }
+    res.sendFile(path.join(frontendDistPath, 'index.html'));
+  });
+}
+
+// 404 Handler for unmatched API endpoints
 app.use((req, res) => {
   res.status(404).json({
     success: false,
-    message: `API endpoint not found: ${req.method} ${req.originalUrl}`
+    message: `API endpoint or resource not found: ${req.method} ${req.originalUrl}`
   });
 });
 

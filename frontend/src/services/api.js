@@ -3,7 +3,19 @@
  * Centralizes all communication between frontend and backend.
  */
 
-export const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const getApiBase = () => {
+  const envUrl = import.meta.env.VITE_API_BASE_URL;
+  if (envUrl) {
+    return envUrl.endsWith('/api') ? envUrl : `${envUrl.replace(/\/$/, '')}/api`;
+  }
+  // If deployed in production without custom API URL (e.g., full-stack on Render), use relative path
+  if (import.meta.env.PROD) {
+    return '/api';
+  }
+  return 'http://localhost:5000/api';
+};
+
+export const API_BASE = getApiBase();
 
 export const getAuthToken = () => {
   try {

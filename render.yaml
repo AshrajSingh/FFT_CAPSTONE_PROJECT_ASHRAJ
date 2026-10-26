@@ -1,9 +1,9 @@
 services:
   - type: web
-    name: stocklink-backend
+    name: stocklink-app
     runtime: node
-    rootDir: backend
-    buildCommand: npm install
+    plan: free
+    buildCommand: npm run build
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
@@ -15,5 +15,3 @@ services:
         sync: false
       - key: JWT_SECRET
         generateValue: true
-      - key: CLIENT_URL
-        sync: false
